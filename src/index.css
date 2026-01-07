@@ -1,0 +1,30 @@
+/* ページ全体の初期化 */
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: black;
+  color: white;
+  height: 100%;
+  font-family: sans-serif;
+}
+
+/* React の root */
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* ゲーム全体 */
+.app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ゲーム画面（canvas） */
+.game-canvas {
+  border: 2px solid white;
+  background-color: black;
+}
