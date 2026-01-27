@@ -4,30 +4,44 @@ html, body {
   height: 100%;
   background: black;
   color: white;
-  overflow: hidden; /* スクロール禁止 */
+  overflow: hidden; /* スクロール抑制 */
   font-family: sans-serif;
 }
 
-#root, .app {
+#root {
   width: 100%;
   height: 100%;
 }
 
+/* 画面中央に縦並び（上：ゲーム、下：ボタン） */
 .app {
+  width: 100%;
+  height: 100vh;
   display: flex;
+  flex-direction: column;     /* ★縦に並べる */
   justify-content: center;
   align-items: center;
+  gap: 0;                     /* 枠をくっつけたいので0 */
 }
 
-/* ★これが超重要：タッチ操作でのスクロール/ズームを抑える */
+/* 上：ゲーム枠 */
 .game-canvas {
   border: 2px solid white;
   background: black;
-
   max-width: 95vw;
-  max-height: 95vh;
+  max-height: 80vh;           /* ★ボタン分を残す */
+  width: auto;
+  height: auto;
+}
+
+/* 下：ボタン枠（ゲーム枠の下側） */
+.ui-canvas {
+  border: 2px solid white;
+  border-top: none;           /* ★一体感 */
+  background: #222;
+  max-width: 95vw;
   width: auto;
   height: auto;
 
-  touch-action: none; /* pointerイベントを安定させる */
+  touch-action: none;         /* ★タッチでスクロール/ズームを防ぐ */
 }

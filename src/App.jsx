@@ -1,17 +1,26 @@
 import { useEffect, useRef } from "react";
 
 export default function App() {
-  const canvasRef = useRef(null);
+  const gameCanvasRef = useRef(null);
+  const uiCanvasRef = useRef(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    const gameCanvas = gameCanvasRef.current;
+    const uiCanvas = uiCanvasRef.current;
 
-    // 論理サイズ（ゲーム内の座標系）
-    const WIDTH = 800;
-    const HEIGHT = 1000;
-    canvas.width = WIDTH;
-    canvas.height = HEIGHT;
+    const gctx = gameCanvas.getContext("2d");
+    const uctx = uiCanvas.getContext("2d");
+
+    // ===== サイズ（論理座標）=====
+    const GAME_W = 800;
+    const GAME_H = 1000;
+    const UI_H = 160;
+
+    gameCanvas.width = GAME_W;
+    gameCanvas.height = GAME_H;
+
+    uiCanvas.width = GAME_W;
+    uiCanvas.height = UI_H;
 
     /* ===== サウンド（WebAudio） ===== */
     let audioCtx = null;
@@ -44,7 +53,7 @@ export default function App() {
       gameover: () => beep(130, 0.2, "sawtooth", 0.08),
     };
 
-    /* ===== ゲーム状態 ===== */
+    /* ===== ゲーム全体の状態 ===== */
     let started = false;
     let gameOver = false;
     let score = 0;
@@ -52,13 +61,13 @@ export default function App() {
     let level = 1;
     let invincibleTimer = 0;
 
-    /* ===== オブジェクト ===== */
+    /* ===== ゲームオブジェクト ===== */
     let player;
     let bullets;
     let enemies;
     let enemyTimer;
 
-    // 連射制御（仮想ボタンの押しっぱなし用）
+    // 連射制御
     let lastShotAt = 0;
 
     function initGame() {
@@ -69,8 +78,8 @@ export default function App() {
       invincibleTimer = 0;
 
       player = {
-        x: WIDTH / 2 - 40,
-        y: HEIGHT - 120,
+        x: GAME_W / 2 - 40,
+        y: GAME_H - 140, // ボタンが下に来るので少し上げる
         w: 80,
         h: 80,
         speed: 6,
@@ -83,8 +92,9 @@ export default function App() {
     }
     initGame();
 
-    /* ===== キー入力（PC用） ===== */
+    /* ===== キー入力（PC） ===== */
     const keys = {};
+
     const keyDown = (e) => {
       keys[e.key] = true;
 
@@ -102,49 +112,59 @@ export default function App() {
         sfx.start();
       }
     };
+
     const keyUp = (e) => {
       keys[e.key] = false;
     };
+
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
 
-    /* ===== 仮想ボタンUI ===== */
-    // 画面下にボタンを置く（固定座標）
+    /* ===== 仮想ボタン（下のUI canvasに描く） ===== */
     const PAD = 20;
-    const BTN_H = 90;
-    const BTN_Y = HEIGHT - BTN_H - PAD;
+    const BTN_H = 100;
+    const BTN_Y = (UI_H - BTN_H) / 2;
 
-    // 左/右は同サイズ、SHOOTは大きめ
     const LEFT_BTN = { x: PAD, y: BTN_Y, w: 160, h: BTN_H, label: "◀" };
     const RIGHT_BTN = { x: PAD + 180, y: BTN_Y, w: 160, h: BTN_H, label: "▶" };
     const SHOOT_BTN = {
-      x: WIDTH - PAD - 260,
+      x: GAME_W - PAD - 260,
       y: BTN_Y,
       w: 260,
       h: BTN_H,
       label: "SHOOT",
     };
 
-    // 押下状態（押しっぱなし対応）
     let vLeft = false;
     let vRight = false;
     let vShoot = false;
 
-    // pointerIdごとに「どのボタン押してるか」を覚える（マルチタッチ対応）
-    const pointerMap = new Map(); // pointerId -> "left" | "right" | "shoot" | null
+    // マルチタッチ対応：pointerId -> "left" | "right" | "shoot" | null
+    const pointerMap = new Map();
 
     const pointInRect = (px, py, r) =>
       px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
 
-    // 画面上の座標 -> canvas内部座標
-    const toCanvasPos = (clientX, clientY) => {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = WIDTH / rect.width;
-      const scaleY = HEIGHT / rect.height;
+    // UI canvasの画面座標 -> UI canvasの内部座標
+    const toUiCanvasPos = (clientX, clientY) => {
+      const rect = uiCanvas.getBoundingClientRect();
+      const scaleX = GAME_W / rect.width;
+      const scaleY = UI_H / rect.height;
       return {
         x: (clientX - rect.left) * scaleX,
         y: (clientY - rect.top) * scaleY,
       };
+    };
+
+    const recomputeVirtualStates = () => {
+      vLeft = false;
+      vRight = false;
+      vShoot = false;
+      for (const v of pointerMap.values()) {
+        if (v === "left") vLeft = true;
+        if (v === "right") vRight = true;
+        if (v === "shoot") vShoot = true;
+      }
     };
 
     const tryStart = () => {
@@ -159,32 +179,29 @@ export default function App() {
       if (!started || gameOver) return;
 
       const now = performance.now();
-      if (now - lastShotAt < 150) return; // 連射間隔（調整可）
+      if (now - lastShotAt < 150) return; // 連射間隔
       if (bullets.length >= 5) return;
 
-      bullets.push({ x: player.x + player.w / 2 - 2, y: player.y });
+      bullets.push({
+        x: player.x + player.w / 2 - 2,
+        y: player.y,
+      });
       lastShotAt = now;
       sfx.shoot();
     };
 
-    const recomputeVirtualStates = () => {
-      // pointerMapの中身から現在の押下状態を作り直す
-      vLeft = false;
-      vRight = false;
-      vShoot = false;
-
-      for (const v of pointerMap.values()) {
-        if (v === "left") vLeft = true;
-        if (v === "right") vRight = true;
-        if (v === "shoot") vShoot = true;
-      }
+    const detectButton = (p) => {
+      if (pointInRect(p.x, p.y, LEFT_BTN)) return "left";
+      if (pointInRect(p.x, p.y, RIGHT_BTN)) return "right";
+      if (pointInRect(p.x, p.y, SHOOT_BTN)) return "shoot";
+      return null;
     };
 
     const onPointerDown = (e) => {
       e.preventDefault();
       tryStart();
 
-      // ゲームオーバー中は、どこタップでもリスタート可
+      // ゲームオーバー中はUI側タップでリスタート可能にする
       if (gameOver) {
         initGame();
         started = true;
@@ -193,17 +210,13 @@ export default function App() {
         return;
       }
 
-      const p = toCanvasPos(e.clientX, e.clientY);
-
-      let which = null;
-      if (pointInRect(p.x, p.y, LEFT_BTN)) which = "left";
-      else if (pointInRect(p.x, p.y, RIGHT_BTN)) which = "right";
-      else if (pointInRect(p.x, p.y, SHOOT_BTN)) which = "shoot";
+      const p = toUiCanvasPos(e.clientX, e.clientY);
+      const which = detectButton(p);
 
       pointerMap.set(e.pointerId, which);
       recomputeVirtualStates();
 
-      // SHOOTは押した瞬間に1発出す（押しっぱなしはupdate側でも撃つ）
+      // SHOOTは押した瞬間に1発
       if (which === "shoot") {
         ensureAudio();
         shootOnce();
@@ -211,22 +224,17 @@ export default function App() {
     };
 
     const onPointerMove = (e) => {
-      // 指がボタンからはみ出したら解除、別ボタンに移ったら切替したいので判定し直す
       if (!pointerMap.has(e.pointerId)) return;
       e.preventDefault();
 
-      const p = toCanvasPos(e.clientX, e.clientY);
-
-      let which = null;
-      if (pointInRect(p.x, p.y, LEFT_BTN)) which = "left";
-      else if (pointInRect(p.x, p.y, RIGHT_BTN)) which = "right";
-      else if (pointInRect(p.x, p.y, SHOOT_BTN)) which = "shoot";
-
+      const p = toUiCanvasPos(e.clientX, e.clientY);
       const prev = pointerMap.get(e.pointerId);
+      const which = detectButton(p);
+
       pointerMap.set(e.pointerId, which);
       recomputeVirtualStates();
 
-      // moveでshootに入った瞬間に1発（気持ちよくする）
+      // 移動中にshootに入った瞬間も1発
       if (which === "shoot" && prev !== "shoot") {
         ensureAudio();
         shootOnce();
@@ -240,8 +248,9 @@ export default function App() {
       recomputeVirtualStates();
     };
 
-    canvas.addEventListener("pointerdown", onPointerDown, { passive: false });
-    canvas.addEventListener("pointermove", onPointerMove, { passive: false });
+    // ★UI canvasだけがタッチ入力を受ける
+    uiCanvas.addEventListener("pointerdown", onPointerDown, { passive: false });
+    uiCanvas.addEventListener("pointermove", onPointerMove, { passive: false });
     window.addEventListener("pointerup", onPointerUp, { passive: false });
     window.addEventListener("pointercancel", onPointerUp, { passive: false });
 
@@ -253,35 +262,41 @@ export default function App() {
 
       level = Math.floor(score / 1000) + 1;
 
-      // ---- 移動（キーボード or 仮想ボタン）----
+      // --- 移動（PCキー or 仮想ボタン） ---
       let dx = 0;
-      if (keys["ArrowLeft"] || vLeft) dx -= player.speed;
-      if (keys["ArrowRight"] || vRight) dx += player.speed;
 
-      // 両方押しなら相殺
-      if ((keys["ArrowLeft"] || vLeft) && (keys["ArrowRight"] || vRight)) dx = 0;
+      const left = keys["ArrowLeft"] || vLeft;
+      const right = keys["ArrowRight"] || vRight;
+
+      if (left && !right) dx = -player.speed;
+      if (right && !left) dx = player.speed;
 
       player.x += dx;
-      player.x = Math.max(0, Math.min(WIDTH - player.w, player.x));
+      player.x = Math.max(0, Math.min(GAME_W - player.w, player.x));
 
-      // ---- 発射（キーボード）----
+      // --- 発射（PC Space）---
       if (keys[" "] && bullets.length < 5) {
-        bullets.push({ x: player.x + player.w / 2 - 2, y: player.y });
+        bullets.push({
+          x: player.x + player.w / 2 - 2,
+          y: player.y,
+        });
         keys[" "] = false;
+        ensureAudio();
         sfx.shoot();
         lastShotAt = performance.now();
       }
 
-      // ---- 発射（仮想ボタン：押しっぱなし連射）----
+      // --- 発射（仮想ボタン：押しっぱなし連射）---
       if (vShoot) {
         ensureAudio();
         shootOnce();
       }
 
+      // 弾移動
       bullets.forEach((b) => (b.y -= 8));
       bullets = bullets.filter((b) => b.y > 0);
 
-      // ---- 敵出現（レベルで変化）----
+      // --- 敵出現（レベルによる変化） ---
       let spawnInterval = 60;
       let enemySpeed = 2;
       if (level >= 2) {
@@ -292,7 +307,7 @@ export default function App() {
       enemyTimer++;
       if (enemyTimer > spawnInterval) {
         enemies.push({
-          x: Math.random() * (WIDTH - 50),
+          x: Math.random() * (GAME_W - 50),
           y: -50,
           w: 50,
           h: 50,
@@ -302,14 +317,15 @@ export default function App() {
         enemyTimer = 0;
       }
 
+      // 敵移動
       enemies.forEach((e) => {
         e.y += e.speed;
         e.x += e.dx || 0;
-        if (e.x < 0 || e.x + e.w > WIDTH) e.dx *= -1;
+        if (e.x < 0 || e.x + e.w > GAME_W) e.dx *= -1;
       });
-      enemies = enemies.filter((e) => e.y < HEIGHT + 80);
+      enemies = enemies.filter((e) => e.y < GAME_H + 80);
 
-      // ---- 弾 vs 敵 ----
+      // --- 弾と敵の当たり判定 ---
       bullets.forEach((b) => {
         enemies.forEach((e) => {
           if (
@@ -318,7 +334,7 @@ export default function App() {
             b.y < e.y + e.h &&
             b.y + 20 > e.y
           ) {
-            e.y = HEIGHT + 100;
+            e.y = GAME_H + 100;
             b.y = -100;
             score += 100;
             sfx.kill();
@@ -326,7 +342,7 @@ export default function App() {
         });
       });
 
-      // ---- プレイヤー vs 敵 ----
+      // --- プレイヤーと敵の当たり判定 ---
       enemies.forEach((e) => {
         if (
           invincibleTimer === 0 &&
@@ -337,7 +353,7 @@ export default function App() {
         ) {
           life--;
           invincibleTimer = 60;
-          e.y = HEIGHT + 100;
+          e.y = GAME_H + 100;
           sfx.hit();
 
           if (life <= 0) {
@@ -348,93 +364,107 @@ export default function App() {
       });
     }
 
-    /* ===== ボタン描画ヘルパー ===== */
-    const drawButton = (btn, pressed) => {
+    /* ===== 描画 ===== */
+    function drawGame() {
       // 背景
-      ctx.globalAlpha = pressed ? 0.9 : 0.6;
-      ctx.fillStyle = pressed ? "#ffffff" : "#888888";
-      ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+      gctx.fillStyle = "black";
+      gctx.fillRect(0, 0, GAME_W, GAME_H);
 
-      // 枠線
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = "white";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
-
-      // 文字
-      ctx.fillStyle = "black";
-      ctx.font = btn.label === "SHOOT" ? "34px sans-serif" : "48px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2);
-    };
-
-    /* ===== draw ===== */
-    function draw() {
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-      // プレイヤー
+      // プレイヤー（無敵点滅）
       if (!started || invincibleTimer % 10 < 5) {
-        ctx.fillStyle = "white";
-        ctx.fillRect(player.x, player.y, player.w, player.h);
+        gctx.fillStyle = "white";
+        gctx.fillRect(player.x, player.y, player.w, player.h);
       }
 
       // 弾
-      ctx.fillStyle = "yellow";
-      bullets.forEach((b) => ctx.fillRect(b.x, b.y, 5, 20));
+      gctx.fillStyle = "yellow";
+      bullets.forEach((b) => gctx.fillRect(b.x, b.y, 5, 20));
 
       // 敵
-      ctx.fillStyle = "red";
-      enemies.forEach((e) => ctx.fillRect(e.x, e.y, e.w, e.h));
+      gctx.fillStyle = "red";
+      enemies.forEach((e) => gctx.fillRect(e.x, e.y, e.w, e.h));
 
       // UI
-      ctx.fillStyle = "white";
-      ctx.font = "24px sans-serif";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-      ctx.fillText(`SCORE: ${score}`, 20, 40);
-      ctx.fillText(`LIFE: ${life}`, 20, 70);
-      ctx.fillText(`LEVEL: ${level}`, 20, 100);
+      gctx.fillStyle = "white";
+      gctx.font = "24px sans-serif";
+      gctx.textAlign = "left";
+      gctx.fillText(`SCORE: ${score}`, 20, 40);
+      gctx.fillText(`LIFE: ${life}`, 20, 70);
+      gctx.fillText(`LEVEL: ${level}`, 20, 100);
 
-      // 開始前メッセージ
+      // 開始前
       if (!started) {
-        ctx.font = "44px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("SHOOTING GAME", WIDTH / 2, HEIGHT / 2 - 40);
-        ctx.font = "24px sans-serif";
-        ctx.fillText("Tap to Start / Enter", WIDTH / 2, HEIGHT / 2 + 20);
-        ctx.fillText("Mobile: Buttons below", WIDTH / 2, HEIGHT / 2 + 60);
+        gctx.font = "44px sans-serif";
+        gctx.textAlign = "center";
+        gctx.fillText("SHOOTING GAME", GAME_W / 2, GAME_H / 2 - 40);
+        gctx.font = "24px sans-serif";
+        gctx.fillText("Press Enter or Tap Buttons to Start", GAME_W / 2, GAME_H / 2 + 20);
       }
 
       // ゲームオーバー
       if (gameOver) {
-        ctx.font = "48px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("GAME OVER", WIDTH / 2, HEIGHT / 2);
-        ctx.font = "24px sans-serif";
-        ctx.fillText("Tap or Press Enter to Restart", WIDTH / 2, HEIGHT / 2 + 50);
+        gctx.font = "48px sans-serif";
+        gctx.textAlign = "center";
+        gctx.fillText("GAME OVER", GAME_W / 2, GAME_H / 2);
+        gctx.font = "24px sans-serif";
+        gctx.fillText("Press Enter or Tap UI to Restart", GAME_W / 2, GAME_H / 2 + 50);
       }
+    }
 
-      // ★仮想ボタン描画（常に表示）
+    const drawButton = (btn, pressed) => {
+      // 背景（押してると明るく）
+      uctx.globalAlpha = pressed ? 0.95 : 0.65;
+      uctx.fillStyle = pressed ? "#ffffff" : "#888888";
+      uctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+
+      // 枠
+      uctx.globalAlpha = 1;
+      uctx.strokeStyle = "white";
+      uctx.lineWidth = 4;
+      uctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
+
+      // 文字
+      uctx.fillStyle = "black";
+      uctx.font = btn.label === "SHOOT" ? "34px sans-serif" : "48px sans-serif";
+      uctx.textAlign = "center";
+      uctx.textBaseline = "middle";
+      uctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2);
+    };
+
+    function drawUI() {
+      // 背景
+      uctx.fillStyle = "#222";
+      uctx.fillRect(0, 0, GAME_W, UI_H);
+
+      // ボタン
       drawButton(LEFT_BTN, vLeft);
       drawButton(RIGHT_BTN, vRight);
       drawButton(SHOOT_BTN, vShoot);
+
+      // 小さめヒント
+      uctx.fillStyle = "white";
+      uctx.font = "18px sans-serif";
+      uctx.textAlign = "center";
+      uctx.textBaseline = "alphabetic";
+      uctx.fillText("Mobile Controls", GAME_W / 2, UI_H - 12);
     }
 
+    /* ===== メインループ ===== */
     const loop = () => {
       update();
-      draw();
+      drawGame();
+      drawUI();
       requestAnimationFrame(loop);
     };
     loop();
 
+    // クリーンアップ
     return () => {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
 
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
+      uiCanvas.removeEventListener("pointerdown", onPointerDown);
+      uiCanvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
 
@@ -444,7 +474,8 @@ export default function App() {
 
   return (
     <div className="app">
-      <canvas ref={canvasRef} className="game-canvas" />
+      <canvas ref={gameCanvasRef} className="game-canvas" />
+      <canvas ref={uiCanvasRef} className="ui-canvas" />
     </div>
   );
 }
