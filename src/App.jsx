@@ -248,6 +248,10 @@ export default function App() {
       recomputeVirtualStates();
     };
 
+    // ★長押しで出る「コピー/選択」系のメニューを抑止（特にAndroidで効く）
+    const preventContextMenu = (e) => e.preventDefault();
+    uiCanvas.addEventListener("contextmenu", preventContextMenu);
+
     // ★UI canvasだけがタッチ入力を受ける
     uiCanvas.addEventListener("pointerdown", onPointerDown, { passive: false });
     uiCanvas.addEventListener("pointermove", onPointerMove, { passive: false });
@@ -366,25 +370,20 @@ export default function App() {
 
     /* ===== 描画 ===== */
     function drawGame() {
-      // 背景
       gctx.fillStyle = "black";
       gctx.fillRect(0, 0, GAME_W, GAME_H);
 
-      // プレイヤー（無敵点滅）
       if (!started || invincibleTimer % 10 < 5) {
         gctx.fillStyle = "white";
         gctx.fillRect(player.x, player.y, player.w, player.h);
       }
 
-      // 弾
       gctx.fillStyle = "yellow";
       bullets.forEach((b) => gctx.fillRect(b.x, b.y, 5, 20));
 
-      // 敵
       gctx.fillStyle = "red";
       enemies.forEach((e) => gctx.fillRect(e.x, e.y, e.w, e.h));
 
-      // UI
       gctx.fillStyle = "white";
       gctx.font = "24px sans-serif";
       gctx.textAlign = "left";
@@ -392,7 +391,6 @@ export default function App() {
       gctx.fillText(`LIFE: ${life}`, 20, 70);
       gctx.fillText(`LEVEL: ${level}`, 20, 100);
 
-      // 開始前
       if (!started) {
         gctx.font = "44px sans-serif";
         gctx.textAlign = "center";
@@ -401,7 +399,6 @@ export default function App() {
         gctx.fillText("Press Enter or Tap Buttons to Start", GAME_W / 2, GAME_H / 2 + 20);
       }
 
-      // ゲームオーバー
       if (gameOver) {
         gctx.font = "48px sans-serif";
         gctx.textAlign = "center";
@@ -412,18 +409,15 @@ export default function App() {
     }
 
     const drawButton = (btn, pressed) => {
-      // 背景（押してると明るく）
       uctx.globalAlpha = pressed ? 0.95 : 0.65;
       uctx.fillStyle = pressed ? "#ffffff" : "#888888";
       uctx.fillRect(btn.x, btn.y, btn.w, btn.h);
 
-      // 枠
       uctx.globalAlpha = 1;
       uctx.strokeStyle = "white";
       uctx.lineWidth = 4;
       uctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
 
-      // 文字
       uctx.fillStyle = "black";
       uctx.font = btn.label === "SHOOT" ? "34px sans-serif" : "48px sans-serif";
       uctx.textAlign = "center";
@@ -432,16 +426,13 @@ export default function App() {
     };
 
     function drawUI() {
-      // 背景
       uctx.fillStyle = "#222";
       uctx.fillRect(0, 0, GAME_W, UI_H);
 
-      // ボタン
       drawButton(LEFT_BTN, vLeft);
       drawButton(RIGHT_BTN, vRight);
       drawButton(SHOOT_BTN, vShoot);
 
-      // 小さめヒント
       uctx.fillStyle = "white";
       uctx.font = "18px sans-serif";
       uctx.textAlign = "center";
@@ -449,7 +440,7 @@ export default function App() {
       uctx.fillText("Mobile Controls", GAME_W / 2, UI_H - 12);
     }
 
-    /* ===== メインループ ===== */
+    /* ===== ループ ===== */
     const loop = () => {
       update();
       drawGame();
@@ -458,10 +449,12 @@ export default function App() {
     };
     loop();
 
-    // クリーンアップ
+    /* ===== クリーンアップ ===== */
     return () => {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
+
+      uiCanvas.removeEventListener("contextmenu", preventContextMenu);
 
       uiCanvas.removeEventListener("pointerdown", onPointerDown);
       uiCanvas.removeEventListener("pointermove", onPointerMove);

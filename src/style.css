@@ -32,6 +32,12 @@ html, body {
   max-height: 80vh;           /* ★ボタン分を残す */
   width: auto;
   height: auto;
+
+  -webkit-user-select: none;      /* iOS Safari */
+  user-select: none;              /* 選択禁止 */
+  -webkit-touch-callout: none;    /* iOSのコピー/辞書/共有メニュー抑止 */
+  -webkit-tap-highlight-color: transparent; /* タップ時の青ハイライト消す */
+  touch-action: none;             /* スクロール/ズーム抑止（既に入れてればOK） */
 }
 
 /* 下：ボタン枠（ゲーム枠の下側） */
@@ -44,4 +50,11 @@ html, body {
   height: auto;
 
   touch-action: none;         /* ★タッチでスクロール/ズームを防ぐ */
+
+  -webkit-user-select: none;      /* iOS Safari */
+  user-select: none;              /* 選択禁止 */
+  -webkit-touch-callout: none;    /* iOSのコピー/辞書/共有メニュー抑止 */
+  -webkit-tap-highlight-color: transparent; /* タップ時の青ハイライト消す */
+  touch-action: none;             /* スクロール/ズーム抑止（既に入れてればOK） */
+
 }
